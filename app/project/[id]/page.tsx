@@ -51,7 +51,7 @@ import {
 import Gantt from "@/components/Gantt";
 import { ColorPicker } from "@/components/ColorPicker";
 import jMoment from "jalali-moment";
-import { GanttTask } from "@/lib/types";
+import { GanttTask, TaskGroup } from "@/lib/types";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import {
   exportProjectAsJSON,
@@ -91,7 +91,9 @@ export default function ProjectPage() {
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [isAddGroupDialogOpen, setIsAddGroupDialogOpen] = useState(false);
   const [isEditTaskSheetOpen, setIsEditTaskSheetOpen] = useState(false);
+  const [isEditGroupSheetOpen, setIsEditGroupSheetOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<GanttTask | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<TaskGroup | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskStartDate, setTaskStartDate] = useState("");
   const [taskEndDate, setTaskEndDate] = useState("");
@@ -304,6 +306,23 @@ export default function ProjectPage() {
     [deleteTask, selectedTask]
   );
 
+  const handleEditGroup = useCallback(async () => {
+    if (!selectedGroup || !groupTitle.trim()) return;
+
+    try {
+      await updateGroup(selectedGroup.id, {
+        title: groupTitle,
+        color: groupColor,
+      });
+      setIsEditGroupSheetOpen(false);
+      setSelectedGroup(null);
+      setGroupTitle("");
+      setGroupColor("#3b82f6");
+    } catch (error) {
+      console.error("Failed to update group:", error);
+    }
+  }, [selectedGroup, groupTitle, groupColor, updateGroup]);
+
   const handleDeleteGroup = useCallback(
     async (groupId: string) => {
       if (
@@ -313,13 +332,24 @@ export default function ProjectPage() {
       ) {
         try {
           await deleteGroup(groupId);
+          if (selectedGroup?.id === groupId) {
+            setIsEditGroupSheetOpen(false);
+            setSelectedGroup(null);
+          }
         } catch (error) {
           console.error("Failed to delete group:", error);
         }
       }
     },
-    [deleteGroup]
+    [deleteGroup, selectedGroup]
   );
+
+  const handleGroupClick = useCallback((group: TaskGroup) => {
+    setSelectedGroup(group);
+    setGroupTitle(group.title);
+    setGroupColor(group.color || "#3b82f6");
+    setIsEditGroupSheetOpen(true);
+  }, []);
 
   const handleTaskClick = useCallback((task: GanttTask) => {
     setSelectedTask(task);
@@ -396,7 +426,7 @@ export default function ProjectPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent
-                  className="sm:max-w-md"
+                  className="sm:max-w-md p-4"
                   style={{ direction: "rtl" }}
                 >
                   <DialogHeader>
@@ -633,30 +663,6 @@ export default function ProjectPage() {
               />
             </div>
           </div>
-
-          {/* Groups Management */}
-          {groups.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {groups.map((group) => (
-                <div
-                  key={group.id}
-                  className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm"
-                >
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: group.color }}
-                  />
-                  <span>{group.title}</span>
-                  <button
-                    onClick={() => handleDeleteGroup(group.id)}
-                    className="text-red-500 hover:text-red-700 ml-1"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {error && (
@@ -672,6 +678,7 @@ export default function ProjectPage() {
               tasks={tasks}
               groups={groups}
               onTaskDoubleClick={handleTaskClick}
+              onGroupClick={handleGroupClick}
             />
           ) : (
             <div className="h-full flex items-center justify-center">
@@ -800,6 +807,71 @@ export default function ProjectPage() {
                     disabled={
                       !taskTitle.trim() || !taskStartDate || !taskEndDate
                     }
+                    className="gap-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    ذخیره تغییرات
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Group Edit Sheet */}
+        <Sheet
+          open={isEditGroupSheetOpen}
+          onOpenChange={setIsEditGroupSheetOpen}
+        >
+          <SheetContent side="right" style={{ direction: "rtl" }}>
+            <SheetHeader>
+              <SheetTitle>ویرایش گروه</SheetTitle>
+              <SheetDescription>
+                اطلاعات گروه را ویرایش کنید یا آن را حذف کنید
+              </SheetDescription>
+            </SheetHeader>
+            <div className="space-y-4 mt-6">
+              <div>
+                <Label className="block text-sm font-medium mb-2">
+                  نام گروه
+                </Label>
+                <Input
+                  value={groupTitle}
+                  onChange={(e) => setGroupTitle(e.target.value)}
+                  placeholder="نام گروه را وارد کنید"
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label className="block text-sm font-medium mb-2">
+                  رنگ گروه
+                </Label>
+                <ColorPicker
+                  selectedColor={groupColor}
+                  onColorChange={setGroupColor}
+                />
+              </div>
+              <div className="flex justify-between pt-4">
+                <Button
+                  variant="destructive"
+                  onClick={() =>
+                    selectedGroup && handleDeleteGroup(selectedGroup.id)
+                  }
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  حذف گروه
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsEditGroupSheetOpen(false)}
+                  >
+                    انصراف
+                  </Button>
+                  <Button
+                    onClick={handleEditGroup}
+                    disabled={!groupTitle.trim()}
                     className="gap-2"
                   >
                     <Edit3 className="w-4 h-4" />

@@ -64,6 +64,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.log("Initializing IndexedDB...");
       await dbManager.initDB();
 
+      console.log("Checking database schema...");
+      await dbManager.checkAndRepairDB();
+
       console.log("Loading projects...");
       await get().loadProjects();
 

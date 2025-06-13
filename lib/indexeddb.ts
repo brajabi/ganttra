@@ -1,7 +1,7 @@
 import { Project, GanttTask, TaskGroup, TASK_COLORS } from "./types";
 
 const DB_NAME = "GanttDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const PROJECTS_STORE = "projects";
 const TASKS_STORE = "tasks";
 const GROUPS_STORE = "groups";
@@ -75,10 +75,39 @@ class IndexedDBManager {
           taskStore.createIndex("groupId", "groupId", { unique: false });
           taskStore.createIndex("title", "title", { unique: false });
         } else {
-          // Upgrade existing tasks store to add groupId index if it doesn't exist
+          // Upgrade existing tasks store to add missing indexes
           const taskStore = transaction.objectStore(TASKS_STORE);
+
+          // Add groupId index if it doesn't exist
           if (!taskStore.indexNames.contains("groupId")) {
-            taskStore.createIndex("groupId", "groupId", { unique: false });
+            try {
+              taskStore.createIndex("groupId", "groupId", { unique: false });
+              console.log("Added groupId index to tasks store");
+            } catch (error) {
+              console.warn("Failed to add groupId index:", error);
+            }
+          }
+
+          // Ensure projectId index exists
+          if (!taskStore.indexNames.contains("projectId")) {
+            try {
+              taskStore.createIndex("projectId", "projectId", {
+                unique: false,
+              });
+              console.log("Added projectId index to tasks store");
+            } catch (error) {
+              console.warn("Failed to add projectId index:", error);
+            }
+          }
+
+          // Ensure title index exists
+          if (!taskStore.indexNames.contains("title")) {
+            try {
+              taskStore.createIndex("title", "title", { unique: false });
+              console.log("Added title index to tasks store");
+            } catch (error) {
+              console.warn("Failed to add title index:", error);
+            }
           }
         }
 
@@ -99,6 +128,55 @@ class IndexedDBManager {
       throw new Error("Database not initialized. Call initDB() first.");
     }
     return this.db;
+  }
+
+  // Utility method to check and repair database schema
+  async checkAndRepairDB(): Promise<void> {
+    const db = this.ensureDB();
+
+    // Check if all required object stores exist
+    const requiredStores = [PROJECTS_STORE, TASKS_STORE, GROUPS_STORE];
+    const missingStores = requiredStores.filter(
+      (store) => !db.objectStoreNames.contains(store)
+    );
+
+    if (missingStores.length > 0) {
+      console.warn("Missing object stores detected:", missingStores);
+      console.log("Database needs to be reset and reinitialized");
+
+      // Close current connection and reset database
+      await this.resetDB();
+      await this.initDB();
+      return;
+    }
+
+    // Check if required indexes exist
+    try {
+      const transaction = db.transaction([TASKS_STORE], "readonly");
+      const taskStore = transaction.objectStore(TASKS_STORE);
+
+      const requiredIndexes = ["projectId", "groupId", "title"];
+      const missingIndexes = requiredIndexes.filter(
+        (index) => !taskStore.indexNames.contains(index)
+      );
+
+      if (missingIndexes.length > 0) {
+        console.warn("Missing indexes detected:", missingIndexes);
+        console.log("Database schema needs to be updated");
+
+        // Close current connection and reinitialize to trigger upgrade
+        if (this.db) {
+          this.db.close();
+          this.db = null;
+        }
+        await this.initDB();
+      }
+    } catch (error) {
+      console.error("Error checking database schema:", error);
+      // If there's an error checking the schema, reset the database
+      await this.resetDB();
+      await this.initDB();
+    }
   }
 
   // Project operations
@@ -330,19 +408,43 @@ class IndexedDBManager {
 
       // Update tasks to remove groupId
       const taskStore = transaction.objectStore(TASKS_STORE);
-      const index = taskStore.index("groupId");
-      const request = index.openCursor(IDBKeyRange.only(id));
 
-      request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-        if (cursor) {
-          const task = cursor.value;
-          const updatedTask = { ...task };
-          delete updatedTask.groupId;
-          cursor.update(updatedTask);
-          cursor.continue();
-        }
-      };
+      // Check if groupId index exists before using it
+      if (taskStore.indexNames.contains("groupId")) {
+        const index = taskStore.index("groupId");
+        const request = index.openCursor(IDBKeyRange.only(id));
+
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest).result;
+          if (cursor) {
+            const task = cursor.value;
+            const updatedTask = { ...task };
+            delete updatedTask.groupId;
+            cursor.update(updatedTask);
+            cursor.continue();
+          }
+        };
+
+        request.onerror = () => reject(request.error);
+      } else {
+        // Fallback: scan all tasks if groupId index doesn't exist
+        const request = taskStore.openCursor();
+
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest).result;
+          if (cursor) {
+            const task = cursor.value;
+            if (task && task.groupId === id) {
+              const updatedTask = { ...task };
+              delete updatedTask.groupId;
+              cursor.update(updatedTask);
+            }
+            cursor.continue();
+          }
+        };
+
+        request.onerror = () => reject(request.error);
+      }
 
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);

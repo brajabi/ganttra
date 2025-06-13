@@ -30,6 +30,7 @@ interface GanttProps {
   className?: string;
   onTaskClick?: (task: GanttTask) => void;
   onTaskDoubleClick?: (task: GanttTask) => void;
+  onGroupClick?: (group: TaskGroup) => void;
 }
 
 // Interface for organized data structure
@@ -46,6 +47,7 @@ const Gantt = React.memo(function Gantt({
   className = "",
   onTaskClick,
   onTaskDoubleClick,
+  onGroupClick,
 }: GanttProps) {
   const [view, setView] = useState<TimelineView>("daily");
   const { updateTask } = useAppStore();
@@ -171,12 +173,13 @@ const Gantt = React.memo(function Gantt({
         return (
           <div
             key={`group-${group.id}`}
-            className="absolute left-0 right-0 flex items-center bg-gray-100 border-b border-gray-300 px-4"
+            className="absolute left-0 right-0 flex items-center bg-gray-100 border-b border-gray-300 px-4 cursor-pointer hover:bg-gray-200 transition-colors"
             style={{
               top: `${row.index * config.rowHeight}px`,
               height: `${config.rowHeight}px`,
               zIndex: 5,
             }}
+            onClick={() => onGroupClick?.(group)}
           >
             <div
               className="flex items-center gap-2"
@@ -204,7 +207,13 @@ const Gantt = React.memo(function Gantt({
         );
       }
     });
-  }, [organizedRows, config, handleTaskUpdate, onTaskDoubleClick]);
+  }, [
+    organizedRows,
+    config,
+    handleTaskUpdate,
+    onTaskDoubleClick,
+    onGroupClick,
+  ]);
 
   // Memoize grid lines for all rows
   const verticalGridLines = useMemo(
@@ -295,8 +304,9 @@ const Gantt = React.memo(function Gantt({
                     return (
                       <div
                         key={`group-${group.id}`}
-                        className="bg-gray-100 border-b border-gray-300"
+                        className="bg-gray-100 border-b border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors"
                         style={{ height: `${config.rowHeight}px` }}
+                        onClick={() => onGroupClick?.(group)}
                       >
                         <div
                           className="flex items-center h-full px-4"
