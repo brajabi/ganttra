@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, FolderOpen, Calendar, Trash2 } from "lucide-react";
+import { Plus, FolderOpen, Calendar, Trash2, Upload } from "lucide-react";
 import { formatJalaliDate } from "@/lib/gantt-utils";
+import { parseImportedJSON } from "@/lib/export-utils";
 
 export default function Home() {
   const router = useRouter();
@@ -35,11 +36,35 @@ export default function Home() {
     resetDatabase,
     createProject,
     deleteProject,
+    importProjectData,
   } = useAppStore();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
+
+  const handleImportJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedData = parseImportedJSON(content);
+        await importProjectData(importedData);
+        alert("پروژه با موفقیت وارد شد");
+        router.push(`/project/${importedData.project.id}`);
+      } catch (error) {
+        console.error("Import failed:", error);
+        alert("خطا در وارد کردن داده‌ها: " + (error as Error).message);
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset file input
+    event.target.value = "";
+  };
 
   useEffect(() => {
     // Initialize database only once
@@ -225,6 +250,24 @@ export default function Home() {
               </SelectContent>
             </Select>
           )}
+
+          {/* Import Button */}
+          <div className="relative">
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportJSON}
+              className="sr-only"
+              id="import-project-file"
+            />
+            <label
+              htmlFor="import-project-file"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-11 px-8 gap-2 cursor-pointer"
+            >
+              <Upload className="w-5 h-5" />
+              وارد کردن پروژه
+            </label>
+          </div>
         </div>
 
         {/* Projects Grid */}

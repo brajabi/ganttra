@@ -34,6 +34,11 @@ interface AppState {
   updateGroup: (id: string, updates: Partial<TaskGroup>) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
   setError: (error: string | null) => void;
+  importProjectData: (projectData: {
+    project: Project;
+    tasks: GanttTask[];
+    groups: TaskGroup[];
+  }) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -353,5 +358,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setError: (error: string | null) => {
     set({ error });
+  },
+
+  importProjectData: async (projectData: {
+    project: Project;
+    tasks: GanttTask[];
+    groups: TaskGroup[];
+  }) => {
+    try {
+      set({ isLoading: true, error: null });
+
+      // Import project
+      await dbManager.addProject(projectData.project);
+
+      // Import groups first (since tasks may reference them)
+      for (const group of projectData.groups) {
+        await dbManager.addGroup(group);
+      }
+
+      // Import tasks
+      for (const task of projectData.tasks) {
+        await dbManager.addTask(task);
+      }
+
+      // Refresh the projects list
+      await get().loadProjects();
+
+      // Set the imported project as current
+      get().setCurrentProject(projectData.project);
+    } catch (error) {
+      console.error("Failed to import project data:", error);
+      set({ error: "خطا در وارد کردن داده‌ها" });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
   },
 }));

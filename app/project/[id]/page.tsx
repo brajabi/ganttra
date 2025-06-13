@@ -27,14 +27,40 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Settings, Trash2, Edit3, Printer, Users } from "lucide-react";
+import {
+  Plus,
+  Settings,
+  Trash2,
+  Edit3,
+  Printer,
+  Users,
+  Download,
+  Upload,
+  FileText,
+  MoreVertical,
+} from "lucide-react";
 import Gantt from "@/components/Gantt";
 import { ColorPicker } from "@/components/ColorPicker";
 import jMoment from "jalali-moment";
 import { GanttTask } from "@/lib/types";
 import { DateTimePicker } from "@/components/DateTimePicker";
+import {
+  exportProjectAsJSON,
+  exportProjectAsMarkdown,
+  downloadJSON,
+  downloadMarkdown,
+  parseImportedJSON,
+  generateSafeFilename,
+} from "@/lib/export-utils";
 
 // Configure jalali-moment
 jMoment.locale("fa");
@@ -59,6 +85,7 @@ export default function ProjectPage() {
     createGroup,
     deleteGroup,
     updateGroup,
+    importProjectData,
   } = useAppStore();
 
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
@@ -72,6 +99,48 @@ export default function ProjectPage() {
   const [taskGroupId, setTaskGroupId] = useState<string>("none");
   const [groupTitle, setGroupTitle] = useState("");
   const [groupColor, setGroupColor] = useState("#3b82f6");
+
+  // Export/Import handlers
+  const handleExportJSON = useCallback(() => {
+    if (!currentProject) return;
+
+    const jsonData = exportProjectAsJSON(currentProject, tasks, groups);
+    const filename = generateSafeFilename(currentProject.name, "json");
+    downloadJSON(jsonData, filename);
+  }, [currentProject, tasks, groups]);
+
+  const handleExportMarkdown = useCallback(() => {
+    if (!currentProject) return;
+
+    const markdownData = exportProjectAsMarkdown(currentProject, tasks, groups);
+    const filename = generateSafeFilename(currentProject.name, "md");
+    downloadMarkdown(markdownData, filename);
+  }, [currentProject, tasks, groups]);
+
+  const handleImportJSON = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const content = e.target?.result as string;
+          const importedData = parseImportedJSON(content);
+          await importProjectData(importedData);
+          alert("داده‌ها با موفقیت وارد شدند");
+        } catch (error) {
+          console.error("Import failed:", error);
+          alert("خطا در وارد کردن داده‌ها: " + (error as Error).message);
+        }
+      };
+      reader.readAsText(file);
+
+      // Reset file input
+      event.target.value = "";
+    },
+    [importProjectData]
+  );
 
   // Initialize database and set current project only once
   useEffect(() => {
@@ -515,6 +584,53 @@ export default function ProjectPage() {
                 <Printer className="w-4 h-4" />
                 چاپ
               </Button>
+
+              {/* Export/Import Dropdown Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <MoreVertical className="w-4 h-4" />
+                    عملیات فایل
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" style={{ direction: "rtl" }}>
+                  <DropdownMenuItem
+                    onClick={handleExportJSON}
+                    disabled={!currentProject}
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    JSON خروجی
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleExportMarkdown}
+                    disabled={!currentProject || tasks.length === 0}
+                    className="gap-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Markdown خروجی
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() =>
+                      document.getElementById("import-file")?.click()
+                    }
+                    className="gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    JSON وارد کردن
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Hidden Import File Input */}
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportJSON}
+                className="sr-only"
+                id="import-file"
+              />
             </div>
           </div>
 
