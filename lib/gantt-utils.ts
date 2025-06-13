@@ -1,4 +1,5 @@
 import jMoment from "jalali-moment";
+import moment from "moment-hijri";
 import { GanttTask, GanttConfig, TimelineView } from "./types";
 
 // Configure jalali-moment to use Persian locale
@@ -23,6 +24,34 @@ export const formatJalaliWeek = (date: Date): string => {
 
 export const getDayName = (date: Date): string => {
   return jMoment(date).format("dddd");
+};
+
+export const formatGregorianDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+};
+
+export const formatHijriDate = (date: Date): string => {
+  // Using moment-hijri for accurate Hijri date conversion
+  const hijriMoment = moment(date);
+  return hijriMoment.format("iYYYY/iMM/iDD");
+};
+
+export const getCompleteDateInfo = (date: Date) => {
+  return {
+    jalali: formatJalaliDate(date, "jYYYY/jMM/jDD"),
+    gregorian: formatGregorianDate(date),
+    hijri: formatHijriDate(date),
+    jalaliLong: jMoment(date).format("dddd، jD jMMMM jYYYY"),
+    gregorianLong: date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+  };
 };
 
 export const generateTimelineDates = (

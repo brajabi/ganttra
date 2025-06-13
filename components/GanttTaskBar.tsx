@@ -31,7 +31,7 @@ export default function GanttTaskBar({
     <div
       className="absolute flex items-center"
       style={{
-        left: `${position.left}px`,
+        right: `${position.left}px`,
         width: `${position.width}px`,
         top: `${index * config.rowHeight + 8}px`,
         height: `${config.rowHeight - 16}px`,
