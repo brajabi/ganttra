@@ -5,7 +5,6 @@ import { GanttTask, GanttConfig } from "@/lib/types";
 import {
   calculateTaskPosition,
   getTaskColor,
-  formatJalaliDate,
   generateTimelineDates,
 } from "@/lib/gantt-utils";
 import {
@@ -201,22 +200,12 @@ export default function GanttTaskBar({
           <TooltipContent side="top" className="max-w-xs">
             <div className="text-center" style={{ direction: "rtl" }}>
               <p className="font-semibold mb-1">{task.title}</p>
-              <p className="text-sm text-muted-foreground">
+              {/* <p className="text-sm text-muted-foreground">
                 شروع: {formatJalaliDate(task.startDate)}
               </p>
               <p className="text-sm text-muted-foreground">
                 پایان: {formatJalaliDate(task.endDate)}
-              </p>
-              {task.progress !== undefined && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  پیشرفت: {task.progress}%
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground mt-2">
-                برای جابجایی: کلیک و کشیدن
-                <br />
-                برای تغییر اندازه: لبه‌های چپ و راست
-              </p>
+              </p> */}
             </div>
           </TooltipContent>
         </Tooltip>

@@ -32,6 +32,7 @@ import { ArrowLeft, Plus, Settings, Trash2, Edit3 } from "lucide-react";
 import Gantt from "@/components/Gantt";
 import jMoment from "jalali-moment";
 import { GanttTask } from "@/lib/types";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 // Configure jalali-moment
 jMoment.locale("fa");
@@ -292,10 +293,10 @@ export default function ProjectPage() {
                       <label className="block text-sm font-medium mb-2">
                         تاریخ شروع
                       </label>
-                      <Input
-                        type="date"
+                      <DateTimePicker
                         value={taskStartDate}
-                        onChange={(e) => setTaskStartDate(e.target.value)}
+                        onChange={setTaskStartDate}
+                        placeholder="انتخاب تاریخ شروع"
                         className="w-full"
                       />
                     </div>
@@ -303,10 +304,10 @@ export default function ProjectPage() {
                       <label className="block text-sm font-medium mb-2">
                         تاریخ پایان
                       </label>
-                      <Input
-                        type="date"
+                      <DateTimePicker
                         value={taskEndDate}
-                        onChange={(e) => setTaskEndDate(e.target.value)}
+                        onChange={setTaskEndDate}
+                        placeholder="انتخاب تاریخ پایان"
                         className="w-full"
                       />
                     </div>
@@ -396,10 +397,10 @@ export default function ProjectPage() {
                 <label className="block text-sm font-medium mb-2">
                   تاریخ شروع
                 </label>
-                <Input
-                  type="date"
+                <DateTimePicker
                   value={taskStartDate}
-                  onChange={(e) => setTaskStartDate(e.target.value)}
+                  onChange={setTaskStartDate}
+                  placeholder="انتخاب تاریخ شروع"
                   className="w-full"
                 />
               </div>
@@ -407,10 +408,10 @@ export default function ProjectPage() {
                 <label className="block text-sm font-medium mb-2">
                   تاریخ پایان
                 </label>
-                <Input
-                  type="date"
+                <DateTimePicker
                   value={taskEndDate}
-                  onChange={(e) => setTaskEndDate(e.target.value)}
+                  onChange={setTaskEndDate}
+                  placeholder="انتخاب تاریخ پایان"
                   className="w-full"
                 />
               </div>
