@@ -7,9 +7,14 @@ import { Badge } from "@/components/ui/badge";
 interface GanttTaskListProps {
   tasks: GanttTask[];
   config: GanttConfig;
+  onTaskClick?: (task: GanttTask) => void;
 }
 
-export default function GanttTaskList({ tasks, config }: GanttTaskListProps) {
+export default function GanttTaskList({
+  tasks,
+  config,
+  onTaskClick,
+}: GanttTaskListProps) {
   return (
     <div
       className="flex-shrink-0 bg-white border-l border-gray-200"
@@ -28,15 +33,16 @@ export default function GanttTaskList({ tasks, config }: GanttTaskListProps) {
         {tasks.map((task) => (
           <div
             key={task.id}
-            className="p-4 hover:bg-gray-50 transition-colors"
+            className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
             style={{ height: `${config.rowHeight}px` }}
+            onClick={() => onTaskClick?.(task)}
           >
             <div
               className="flex items-center justify-between h-full"
               style={{ direction: "rtl" }}
             >
               <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-medium text-gray-900 truncate text-right">
+                <h4 className="text-sm font-medium text-gray-900 truncate text-right hover:text-blue-600 transition-colors">
                   {task.title}
                 </h4>
                 <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 justify-end">

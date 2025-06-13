@@ -25,9 +25,14 @@ import jMoment from "jalali-moment";
 interface GanttProps {
   tasks: GanttTask[];
   className?: string;
+  onTaskClick?: (task: GanttTask) => void;
 }
 
-const Gantt = React.memo(function Gantt({ tasks, className = "" }: GanttProps) {
+const Gantt = React.memo(function Gantt({
+  tasks,
+  className = "",
+  onTaskClick,
+}: GanttProps) {
   const [view, setView] = useState<TimelineView>("daily");
   const { updateTask } = useAppStore();
 
@@ -143,7 +148,11 @@ const Gantt = React.memo(function Gantt({ tasks, className = "" }: GanttProps) {
       <CardContent className="p-0">
         <div className="flex overflow-hidden border border-gray-200">
           {/* Task List */}
-          <GanttTaskList tasks={tasks} config={config} />
+          <GanttTaskList
+            tasks={tasks}
+            config={config}
+            onTaskClick={onTaskClick}
+          />
 
           {/* Chart Area */}
           <div className="flex-1 overflow-x-auto">
