@@ -26,10 +26,10 @@ export default function GanttTaskList({
 }: GanttTaskListProps) {
   return (
     <div
-      className="flex-shrink-0 bg-white border-l border-gray-200"
+      className="flex-shrink-0 bg-white border-l border-gray-200 flex flex-col"
       style={{ width: "300px" }}
     >
-      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 p-4">
+      <div className="flex-shrink-0 bg-gray-50 border-b border-gray-200 p-4">
         <h3
           className="font-semibold text-gray-900 text-right"
           style={{ direction: "rtl" }}
@@ -38,7 +38,7 @@ export default function GanttTaskList({
         </h3>
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-gray-100 flex-1">
         {organizedRows.map((row) => {
           if (row.type === "group") {
             const group = row.data as TaskGroup;

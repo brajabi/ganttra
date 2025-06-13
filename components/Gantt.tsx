@@ -6,10 +6,12 @@ import { useAppStore } from "@/lib/store";
 import {
   calculateGanttDimensions,
   generateTimelineDates,
+  formatJalaliDate,
+  toPersianNumbers,
 } from "@/lib/gantt-utils";
 import GanttTimeline from "./GanttTimeline";
-import GanttTaskList from "./GanttTaskList";
 import GanttTaskBar from "./GanttTaskBar";
+import { Badge } from "@/components/ui/badge";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,6 +49,10 @@ const Gantt = React.memo(function Gantt({
 }: GanttProps) {
   const [view, setView] = useState<TimelineView>("daily");
   const { updateTask } = useAppStore();
+
+  // Refs for scroll synchronization
+  const taskListScrollRef = React.useRef<HTMLDivElement>(null);
+  const chartScrollRef = React.useRef<HTMLDivElement>(null);
 
   // Organize tasks and groups into rows
   const organizedRows = useMemo((): GanttRow[] => {
@@ -139,6 +145,22 @@ const Gantt = React.memo(function Gantt({
 
   const handleViewChange = useCallback((value: TimelineView) => {
     setView(value);
+  }, []);
+
+  // Scroll synchronization handlers
+  const handleTaskListScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (chartScrollRef.current) {
+        chartScrollRef.current.scrollTop = e.currentTarget.scrollTop;
+      }
+    },
+    []
+  );
+
+  const handleChartScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (taskListScrollRef.current) {
+      taskListScrollRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
   }, []);
 
   // Render task bars and group headers
@@ -246,40 +268,142 @@ const Gantt = React.memo(function Gantt({
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="flex overflow-hidden border border-gray-200">
+        <div className="flex border border-gray-200 max-h-[600px] overflow-hidden">
           {/* Task List */}
-          <GanttTaskList
-            organizedRows={organizedRows}
-            config={config}
-            onTaskClick={onTaskClick}
-            onTaskDoubleClick={onTaskDoubleClick}
-          />
+          <div className="flex flex-col">
+            <div
+              className="flex-shrink-0 bg-gray-50 border-b border-gray-200 p-4"
+              style={{ height: "53px" }}
+            >
+              <h3
+                className="font-semibold text-gray-900 text-right"
+                style={{ direction: "rtl" }}
+              >
+                فهرست وظایف
+              </h3>
+            </div>
+            <div
+              ref={taskListScrollRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden"
+              onScroll={handleTaskListScroll}
+              style={{ width: "300px" }}
+            >
+              <div className="divide-y divide-gray-100">
+                {organizedRows.map((row) => {
+                  if (row.type === "group") {
+                    const group = row.data as TaskGroup;
+                    return (
+                      <div
+                        key={`group-${group.id}`}
+                        className="bg-gray-100 border-b border-gray-300"
+                        style={{ height: `${config.rowHeight}px` }}
+                      >
+                        <div
+                          className="flex items-center h-full px-4"
+                          style={{ direction: "rtl" }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-4 h-4 rounded-full"
+                              style={{
+                                backgroundColor: group.color || "#6b7280",
+                              }}
+                            />
+                            <span className="font-semibold text-gray-800">
+                              {group.title}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    const task = row.data as GanttTask;
+                    return (
+                      <div
+                        key={`task-${task.id}`}
+                        className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                        style={{ height: `${config.rowHeight}px` }}
+                        onClick={() => onTaskClick?.(task)}
+                        onDoubleClick={() => onTaskDoubleClick?.(task)}
+                      >
+                        <div
+                          className="flex items-center justify-between h-full"
+                          style={{ direction: "rtl" }}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-gray-900 truncate text-right hover:text-blue-600 transition-colors">
+                              {task.title}
+                            </h4>
+                            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 justify-end">
+                              <span>
+                                {formatJalaliDate(task.startDate, "jMM/jDD")}
+                              </span>
+                              <span>تا</span>
+                              <span>
+                                {formatJalaliDate(task.endDate, "jMM/jDD")}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mr-3">
+                            {task.progress !== undefined && (
+                              <Badge variant="outline" className="text-xs">
+                                {toPersianNumbers(task.progress.toString())}%
+                              </Badge>
+                            )}
+
+                            <div
+                              className="w-3 h-3 rounded-full border border-white shadow-sm"
+                              style={{
+                                backgroundColor: task.color || "#3b82f6",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                })}
+              </div>
+            </div>
+          </div>
 
           {/* Chart Area */}
-          <div className="flex-1 overflow-x-auto">
-            <div className="relative" style={{ width: `${chartWidth}px` }}>
-              {/* Timeline Header */}
-              <GanttTimeline config={config} />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Timeline Header - Fixed */}
+            <div className="flex-shrink-0 overflow-x-auto">
+              <div style={{ width: `${chartWidth}px` }}>
+                <GanttTimeline config={config} />
+              </div>
+            </div>
 
-              {/* Task Chart */}
-              <div
-                className="relative bg-white"
-                style={{
-                  height: `${organizedRows.length * config.rowHeight}px`,
-                  minHeight: "200px",
-                }}
-              >
-                {/* Background Grid */}
-                <div className="absolute inset-0">
-                  {verticalGridLines}
-                  {horizontalGridLines}
+            {/* Chart Body - Scrollable */}
+            <div
+              ref={chartScrollRef}
+              className="flex-1 overflow-auto"
+              onScroll={handleChartScroll}
+            >
+              <div className="relative" style={{ width: `${chartWidth}px` }}>
+                {/* Task Chart */}
+                <div
+                  className="relative bg-white"
+                  style={{
+                    height: `${organizedRows.length * config.rowHeight}px`,
+                    minHeight: "200px",
+                  }}
+                >
+                  {/* Background Grid */}
+                  <div className="absolute inset-0">
+                    {verticalGridLines}
+                    {horizontalGridLines}
+                  </div>
+
+                  {/* Task Bars and Group Headers */}
+                  {rowElements}
+
+                  {/* Today Indicator */}
+                  <TodayIndicator config={config} />
                 </div>
-
-                {/* Task Bars and Group Headers */}
-                {rowElements}
-
-                {/* Today Indicator */}
-                <TodayIndicator config={config} />
               </div>
             </div>
           </div>

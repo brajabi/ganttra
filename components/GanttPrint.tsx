@@ -275,6 +275,27 @@ const GanttPrint = React.memo(function GanttPrint({
             className="print-task-list bg-gray-50 border-l border-gray-400"
             style={{ width: "250px" }}
           >
+            {/* Task List Header - matches timeline header height */}
+            <div
+              className="bg-gray-100 border-b border-gray-400 px-2 print-timeline-header"
+              style={{ height: "50px" }}
+            >
+              <div
+                className="flex items-center h-full"
+                style={{ direction: "rtl" }}
+              >
+                <div className="text-sm font-semibold text-gray-900">
+                  فهرست وظایف
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Dates Header Spacer */}
+            <div
+              className="bg-white border-b border-gray-400"
+              style={{ height: "30px" }}
+            />
+
             {/* Task List Items */}
             <div>
               {organizedRows.map((row) => {
