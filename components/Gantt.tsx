@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { GanttTask, GanttConfig, TimelineView } from "@/lib/types";
+import { GanttTask, GanttConfig, TimelineView, TaskGroup } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import {
   calculateGanttDimensions,
@@ -24,13 +24,23 @@ import jMoment from "jalali-moment";
 
 interface GanttProps {
   tasks: GanttTask[];
+  groups?: TaskGroup[];
   className?: string;
   onTaskClick?: (task: GanttTask) => void;
   onTaskDoubleClick?: (task: GanttTask) => void;
 }
 
+// Interface for organized data structure
+interface GanttRow {
+  type: "group" | "task";
+  id: string;
+  data: TaskGroup | GanttTask;
+  index: number; // Position in the visual list
+}
+
 const Gantt = React.memo(function Gantt({
   tasks,
+  groups = [],
   className = "",
   onTaskClick,
   onTaskDoubleClick,
@@ -38,13 +48,73 @@ const Gantt = React.memo(function Gantt({
   const [view, setView] = useState<TimelineView>("daily");
   const { updateTask } = useAppStore();
 
+  // Organize tasks and groups into rows
+  const organizedRows = useMemo((): GanttRow[] => {
+    const rows: GanttRow[] = [];
+    let index = 0;
+
+    // Group tasks by groupId
+    const tasksByGroup = tasks.reduce((acc, task) => {
+      const groupId = task.groupId || "ungrouped";
+      if (!acc[groupId]) {
+        acc[groupId] = [];
+      }
+      acc[groupId].push(task);
+      return acc;
+    }, {} as Record<string, GanttTask[]>);
+
+    // First, add grouped tasks
+    groups.forEach((group) => {
+      // Add group header
+      rows.push({
+        type: "group",
+        id: group.id,
+        data: group,
+        index: index++,
+      });
+
+      // Add tasks in this group
+      const groupTasks = tasksByGroup[group.id] || [];
+      groupTasks.forEach((task) => {
+        rows.push({
+          type: "task",
+          id: task.id,
+          data: task,
+          index: index++,
+        });
+      });
+    });
+
+    // Then add ungrouped tasks
+    const ungroupedTasks = tasksByGroup["ungrouped"] || [];
+    ungroupedTasks.forEach((task) => {
+      rows.push({
+        type: "task",
+        id: task.id,
+        data: task,
+        index: index++,
+      });
+    });
+
+    return rows;
+  }, [tasks, groups]);
+
+  // Extract only tasks for dimension calculation
+  const allTasks = useMemo(
+    () =>
+      organizedRows
+        .filter((row) => row.type === "task")
+        .map((row) => row.data as GanttTask),
+    [organizedRows]
+  );
+
   const config: GanttConfig = useMemo(() => {
-    const dimensions = calculateGanttDimensions(tasks, view);
+    const dimensions = calculateGanttDimensions(allTasks, view);
     return {
       view,
       ...dimensions,
     };
-  }, [tasks, view]);
+  }, [allTasks, view]);
 
   const timelineDates = useMemo(
     () => generateTimelineDates(config.startDate, config.endDate, config.view),
@@ -71,23 +141,50 @@ const Gantt = React.memo(function Gantt({
     setView(value);
   }, []);
 
-  // Memoize task bars to prevent re-creation
-  const taskBars = useMemo(
-    () =>
-      tasks.map((task, index) => (
-        <GanttTaskBar
-          key={task.id}
-          task={task}
-          config={config}
-          index={index}
-          onTaskUpdate={handleTaskUpdate}
-          onTaskDoubleClick={onTaskDoubleClick}
-        />
-      )),
-    [tasks, config, handleTaskUpdate, onTaskDoubleClick]
-  );
+  // Render task bars and group headers
+  const rowElements = useMemo(() => {
+    return organizedRows.map((row) => {
+      if (row.type === "group") {
+        const group = row.data as TaskGroup;
+        return (
+          <div
+            key={`group-${group.id}`}
+            className="absolute left-0 right-0 flex items-center bg-gray-100 border-b border-gray-300 px-4"
+            style={{
+              top: `${row.index * config.rowHeight}px`,
+              height: `${config.rowHeight}px`,
+              zIndex: 5,
+            }}
+          >
+            <div
+              className="flex items-center gap-2"
+              style={{ direction: "rtl" }}
+            >
+              <div
+                className="w-4 h-4 rounded-full"
+                style={{ backgroundColor: group.color || "#6b7280" }}
+              />
+              <span className="font-semibold text-gray-800">{group.title}</span>
+            </div>
+          </div>
+        );
+      } else {
+        const task = row.data as GanttTask;
+        return (
+          <GanttTaskBar
+            key={`task-${task.id}`}
+            task={task}
+            config={config}
+            index={row.index}
+            onTaskUpdate={handleTaskUpdate}
+            onTaskDoubleClick={onTaskDoubleClick}
+          />
+        );
+      }
+    });
+  }, [organizedRows, config, handleTaskUpdate, onTaskDoubleClick]);
 
-  // Memoize grid lines
+  // Memoize grid lines for all rows
   const verticalGridLines = useMemo(
     () =>
       timelineDates.map((_, index) => (
@@ -105,7 +202,7 @@ const Gantt = React.memo(function Gantt({
 
   const horizontalGridLines = useMemo(
     () =>
-      tasks.map((_, index) => (
+      organizedRows.map((_, index) => (
         <div
           key={index}
           className="absolute left-0 right-0 border-b border-gray-100"
@@ -115,7 +212,7 @@ const Gantt = React.memo(function Gantt({
           }}
         />
       )),
-    [tasks, config.rowHeight]
+    [organizedRows, config.rowHeight]
   );
 
   return (
@@ -152,7 +249,7 @@ const Gantt = React.memo(function Gantt({
         <div className="flex overflow-hidden border border-gray-200">
           {/* Task List */}
           <GanttTaskList
-            tasks={tasks}
+            organizedRows={organizedRows}
             config={config}
             onTaskClick={onTaskClick}
             onTaskDoubleClick={onTaskDoubleClick}
@@ -168,7 +265,7 @@ const Gantt = React.memo(function Gantt({
               <div
                 className="relative bg-white"
                 style={{
-                  height: `${tasks.length * config.rowHeight}px`,
+                  height: `${organizedRows.length * config.rowHeight}px`,
                   minHeight: "200px",
                 }}
               >
@@ -178,8 +275,8 @@ const Gantt = React.memo(function Gantt({
                   {horizontalGridLines}
                 </div>
 
-                {/* Task Bars */}
-                {taskBars}
+                {/* Task Bars and Group Headers */}
+                {rowElements}
 
                 {/* Today Indicator */}
                 <TodayIndicator config={config} />
@@ -199,55 +296,55 @@ const TodayIndicator = React.memo(function TodayIndicator({
   config: GanttConfig;
 }) {
   const todayPosition = useMemo(() => {
-    const today = new Date();
     const timelineDates = generateTimelineDates(
       config.startDate,
       config.endDate,
       config.view
     );
-
-    let todayIndex = -1;
-    let position = 0;
+    const today = new Date();
 
     if (config.view === "daily") {
-      // Find today's position in daily view using jalali-moment for consistent comparison
-      todayIndex = timelineDates.findIndex((date) => {
-        return jMoment(date).isSame(jMoment(today), "day");
-      });
+      // Find today's position in daily view
+      const todayIndex = timelineDates.findIndex((date) =>
+        jMoment(date).isSame(jMoment(today), "day")
+      );
 
-      if (todayIndex !== -1) {
-        position = todayIndex * config.cellWidth + config.cellWidth / 2;
-      }
+      if (todayIndex === -1) return null;
+
+      return {
+        right: `${todayIndex * config.cellWidth + config.cellWidth / 2}px`,
+      };
     } else {
-      // Weekly view - find which week contains today
-      const todayWeekStart = jMoment(today).startOf("week");
+      // Weekly view - find which week contains today and position within that week
+      const todayMoment = jMoment(today);
+      const weekIndex = timelineDates.findIndex((date) =>
+        todayMoment.isSame(jMoment(date), "week")
+      );
 
-      todayIndex = timelineDates.findIndex((date) => {
-        const weekStart = jMoment(date).startOf("week");
-        return weekStart.isSame(todayWeekStart, "week");
-      });
+      if (weekIndex === -1) return null;
 
-      if (todayIndex !== -1) {
-        // Calculate position within the week
-        const weekStart = jMoment(timelineDates[todayIndex]).startOf("week");
-        const dayInWeek = jMoment(today).diff(weekStart, "days");
-        const dayWidth = config.cellWidth / 7; // Divide week width by 7 days
-        position = todayIndex * config.cellWidth + dayInWeek * dayWidth;
-      }
+      // Calculate day within the week (0 = start of week, 6 = end of week)
+      const weekStart = jMoment(timelineDates[weekIndex]).startOf("week");
+      const dayInWeek = todayMoment.diff(weekStart, "days");
+      const dayPosition = (dayInWeek / 7) * config.cellWidth;
+
+      return {
+        right: `${weekIndex * config.cellWidth + dayPosition}px`,
+      };
     }
-
-    return { index: todayIndex, position };
   }, [config]);
 
-  if (todayPosition.index === -1) return null;
+  if (!todayPosition) return null;
 
   return (
     <div
-      className="absolute top-0 bottom-0 pointer-events-none z-10"
-      style={{ right: `${todayPosition.position}px` }}
+      className="absolute top-0 bottom-0 z-10 pointer-events-none"
+      style={todayPosition}
     >
-      <div className="w-px h-full bg-red-500 opacity-70" />
-      <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+      <div className="relative h-full">
+        <div className="absolute top-0 w-2 h-2 bg-red-500 rounded-full transform -translate-x-1/2" />
+        <div className="w-px h-full bg-red-500 opacity-70" />
+      </div>
     </div>
   );
 });

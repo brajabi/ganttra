@@ -28,8 +28,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Plus, Settings, Trash2, Edit3, Printer } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Plus, Settings, Trash2, Edit3, Printer, Users } from "lucide-react";
 import Gantt from "@/components/Gantt";
+import { ColorPicker } from "@/components/ColorPicker";
 import jMoment from "jalali-moment";
 import { GanttTask } from "@/lib/types";
 import { DateTimePicker } from "@/components/DateTimePicker";
@@ -46,6 +48,7 @@ export default function ProjectPage() {
     projects,
     currentProject,
     tasks,
+    groups,
     isLoading,
     error,
     initializeDB,
@@ -53,14 +56,22 @@ export default function ProjectPage() {
     createTask,
     deleteTask,
     updateTask,
+    createGroup,
+    deleteGroup,
+    updateGroup,
   } = useAppStore();
 
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+  const [isAddGroupDialogOpen, setIsAddGroupDialogOpen] = useState(false);
   const [isEditTaskSheetOpen, setIsEditTaskSheetOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<GanttTask | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskStartDate, setTaskStartDate] = useState("");
   const [taskEndDate, setTaskEndDate] = useState("");
+  const [taskColor, setTaskColor] = useState("#3b82f6");
+  const [taskGroupId, setTaskGroupId] = useState<string>("none");
+  const [groupTitle, setGroupTitle] = useState("");
+  const [groupColor, setGroupColor] = useState("#3b82f6");
 
   // Initialize database and set current project only once
   useEffect(() => {
@@ -115,15 +126,57 @@ export default function ProjectPage() {
         return;
       }
 
-      await createTask(currentProject.id, taskTitle, startDate, endDate);
+      const task = await createTask(
+        currentProject.id,
+        taskTitle,
+        startDate,
+        endDate,
+        taskGroupId === "none" ? undefined : taskGroupId
+      );
+
+      // Update task color if different from default
+      if (taskColor !== "#3b82f6") {
+        await updateTask(task.id, { color: taskColor });
+      }
+
       setIsAddTaskDialogOpen(false);
       setTaskTitle("");
       setTaskStartDate("");
       setTaskEndDate("");
+      setTaskColor("#3b82f6");
+      setTaskGroupId("none");
     } catch (error) {
       console.error("Failed to create task:", error);
     }
-  }, [taskTitle, taskStartDate, taskEndDate, currentProject, createTask]);
+  }, [
+    taskTitle,
+    taskStartDate,
+    taskEndDate,
+    taskColor,
+    taskGroupId,
+    currentProject,
+    createTask,
+    updateTask,
+  ]);
+
+  const handleAddGroup = useCallback(async () => {
+    if (!groupTitle.trim() || !currentProject) return;
+
+    try {
+      const group = await createGroup(currentProject.id, groupTitle);
+
+      // Update group color if different from default
+      if (groupColor !== "#3b82f6") {
+        await updateGroup(group.id, { color: groupColor });
+      }
+
+      setIsAddGroupDialogOpen(false);
+      setGroupTitle("");
+      setGroupColor("#3b82f6");
+    } catch (error) {
+      console.error("Failed to create group:", error);
+    }
+  }, [groupTitle, groupColor, currentProject, createGroup, updateGroup]);
 
   const handleEditTask = useCallback(async () => {
     if (!selectedTask || !taskTitle.trim() || !taskStartDate || !taskEndDate)
@@ -142,16 +195,28 @@ export default function ProjectPage() {
         title: taskTitle,
         startDate,
         endDate,
+        color: taskColor,
+        groupId: taskGroupId === "none" ? undefined : taskGroupId,
       });
       setIsEditTaskSheetOpen(false);
       setSelectedTask(null);
       setTaskTitle("");
       setTaskStartDate("");
       setTaskEndDate("");
+      setTaskColor("#3b82f6");
+      setTaskGroupId("none");
     } catch (error) {
       console.error("Failed to update task:", error);
     }
-  }, [selectedTask, taskTitle, taskStartDate, taskEndDate, updateTask]);
+  }, [
+    selectedTask,
+    taskTitle,
+    taskStartDate,
+    taskEndDate,
+    taskColor,
+    taskGroupId,
+    updateTask,
+  ]);
 
   const handleDeleteTask = useCallback(
     async (taskId: string) => {
@@ -170,11 +235,30 @@ export default function ProjectPage() {
     [deleteTask, selectedTask]
   );
 
+  const handleDeleteGroup = useCallback(
+    async (groupId: string) => {
+      if (
+        confirm(
+          "آیا از حذف این گروه اطمینان دارید؟ تسک‌های داخل گروه از گروه خارج خواهند شد."
+        )
+      ) {
+        try {
+          await deleteGroup(groupId);
+        } catch (error) {
+          console.error("Failed to delete group:", error);
+        }
+      }
+    },
+    [deleteGroup]
+  );
+
   const handleTaskClick = useCallback((task: GanttTask) => {
     setSelectedTask(task);
     setTaskTitle(task.title);
     setTaskStartDate(jMoment(task.startDate).format("YYYY-MM-DD"));
     setTaskEndDate(jMoment(task.endDate).format("YYYY-MM-DD"));
+    setTaskColor(task.color || "#3b82f6");
+    setTaskGroupId(task.groupId || "none");
     setIsEditTaskSheetOpen(true);
   }, []);
 
@@ -220,15 +304,6 @@ export default function ProjectPage() {
         <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBackClick}
-                className="gap-2"
-              >
-                بازگشت
-                <ArrowLeft className="w-4 h-4" />
-              </Button> */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   {currentProject.name}
@@ -239,6 +314,64 @@ export default function ProjectPage() {
                   </p>
                 )}
               </div>
+
+              {/* Add Group Button */}
+              <Dialog
+                open={isAddGroupDialogOpen}
+                onOpenChange={setIsAddGroupDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Users className="w-4 h-4" />
+                    افزودن گروه
+                  </Button>
+                </DialogTrigger>
+                <DialogContent
+                  className="sm:max-w-md"
+                  style={{ direction: "rtl" }}
+                >
+                  <DialogHeader>
+                    <DialogTitle>افزودن گروه جدید</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="block text-sm font-medium mb-2">
+                        نام گروه
+                      </Label>
+                      <Input
+                        value={groupTitle}
+                        onChange={(e) => setGroupTitle(e.target.value)}
+                        placeholder="نام گروه را وارد کنید"
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <Label className="block text-sm font-medium mb-2">
+                        رنگ گروه
+                      </Label>
+                      <ColorPicker
+                        selectedColor={groupColor}
+                        onColorChange={setGroupColor}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsAddGroupDialogOpen(false)}
+                      >
+                        انصراف
+                      </Button>
+                      <Button
+                        onClick={handleAddGroup}
+                        disabled={!groupTitle.trim()}
+                      >
+                        افزودن گروه
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               {/* Add Task Button */}
               <Dialog
                 open={isAddTaskDialogOpen}
@@ -259,9 +392,9 @@ export default function ProjectPage() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <Label className="block text-sm font-medium mb-2">
                         عنوان تسک
-                      </label>
+                      </Label>
                       <Input
                         value={taskTitle}
                         onChange={(e) => setTaskTitle(e.target.value)}
@@ -270,9 +403,45 @@ export default function ProjectPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <Label className="block text-sm font-medium mb-2">
+                        گروه (اختیاری)
+                      </Label>
+                      <Select
+                        value={taskGroupId}
+                        onValueChange={setTaskGroupId}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="انتخاب گروه" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">بدون گروه</SelectItem>
+                          {groups.map((group) => (
+                            <SelectItem key={group.id} value={group.id}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: group.color }}
+                                />
+                                {group.title}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="block text-sm font-medium mb-2">
+                        رنگ تسک
+                      </Label>
+                      <ColorPicker
+                        selectedColor={taskColor}
+                        onColorChange={setTaskColor}
+                      />
+                    </div>
+                    <div>
+                      <Label className="block text-sm font-medium mb-2">
                         تاریخ شروع
-                      </label>
+                      </Label>
                       <DateTimePicker
                         value={taskStartDate}
                         onChange={setTaskStartDate}
@@ -281,9 +450,9 @@ export default function ProjectPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <Label className="block text-sm font-medium mb-2">
                         تاریخ پایان
-                      </label>
+                      </Label>
                       <DateTimePicker
                         value={taskEndDate}
                         onChange={setTaskEndDate}
@@ -348,6 +517,30 @@ export default function ProjectPage() {
               </Button>
             </div>
           </div>
+
+          {/* Groups Management */}
+          {groups.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {groups.map((group) => (
+                <div
+                  key={group.id}
+                  className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: group.color }}
+                  />
+                  <span>{group.title}</span>
+                  <button
+                    onClick={() => handleDeleteGroup(group.id)}
+                    className="text-red-500 hover:text-red-700 ml-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -359,7 +552,11 @@ export default function ProjectPage() {
         {/* Gantt Chart - Full Screen */}
         <div className="flex-1 overflow-hidden">
           {tasks.length > 0 ? (
-            <Gantt tasks={tasks} onTaskDoubleClick={handleTaskClick} />
+            <Gantt
+              tasks={tasks}
+              groups={groups}
+              onTaskDoubleClick={handleTaskClick}
+            />
           ) : (
             <div className="h-full flex items-center justify-center">
               <Card className="text-center py-12">
@@ -399,9 +596,9 @@ export default function ProjectPage() {
             </SheetHeader>
             <div className="space-y-4 mt-6">
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <Label className="block text-sm font-medium mb-2">
                   عنوان تسک
-                </label>
+                </Label>
                 <Input
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
@@ -410,9 +607,42 @@ export default function ProjectPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <Label className="block text-sm font-medium mb-2">
+                  گروه (اختیاری)
+                </Label>
+                <Select value={taskGroupId} onValueChange={setTaskGroupId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="انتخاب گروه" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">بدون گروه</SelectItem>
+                    {groups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: group.color }}
+                          />
+                          {group.title}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="block text-sm font-medium mb-2">
+                  رنگ تسک
+                </Label>
+                <ColorPicker
+                  selectedColor={taskColor}
+                  onColorChange={setTaskColor}
+                />
+              </div>
+              <div>
+                <Label className="block text-sm font-medium mb-2">
                   تاریخ شروع
-                </label>
+                </Label>
                 <DateTimePicker
                   value={taskStartDate}
                   onChange={setTaskStartDate}
@@ -421,9 +651,9 @@ export default function ProjectPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <Label className="block text-sm font-medium mb-2">
                   تاریخ پایان
-                </label>
+                </Label>
                 <DateTimePicker
                   value={taskEndDate}
                   onChange={setTaskEndDate}

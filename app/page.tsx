@@ -32,6 +32,7 @@ export default function Home() {
     error,
     isDBInitialized,
     initializeDB,
+    resetDatabase,
     createProject,
     deleteProject,
   } = useAppStore();
@@ -43,9 +44,25 @@ export default function Home() {
   useEffect(() => {
     // Initialize database only once
     if (!isDBInitialized) {
+      console.log("Initializing database from Home component...");
       initializeDB();
     }
   }, [isDBInitialized, initializeDB]);
+
+  const handleResetDatabase = async () => {
+    if (
+      confirm(
+        "آیا از پاک کردن تمام داده‌ها اطمینان دارید؟ این عمل غیرقابل بازگشت است."
+      )
+    ) {
+      try {
+        await resetDatabase();
+        window.location.reload();
+      } catch (error) {
+        console.error("Reset failed:", error);
+      }
+    }
+  };
 
   const handleCreateProject = async () => {
     if (!projectName.trim()) return;
@@ -82,6 +99,17 @@ export default function Home() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
           <p className="mt-4 text-gray-600">در حال راه‌اندازی...</p>
+          <p className="mt-2 text-xs text-gray-500">
+            در صورت طولانی شدن انتظار، صفحه را رفرش کنید
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            رفرش صفحه
+          </Button>
         </div>
       </div>
     );
@@ -102,14 +130,23 @@ export default function Home() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => window.location.reload()}
-            >
-              تلاش مجدد
-            </Button>
+            <div className="mt-2 flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.reload()}
+              >
+                تلاش مجدد
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetDatabase}
+                className="text-red-600 hover:text-red-700"
+              >
+                پاک کردن داده‌ها
+              </Button>
+            </div>
           </div>
         )}
 

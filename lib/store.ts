@@ -1,31 +1,38 @@
 import { create } from "zustand";
-import { Project, GanttTask } from "./types";
+import { Project, GanttTask, TaskGroup } from "./types";
 import { dbManager, generateId, generateRandomColor } from "./indexeddb";
 
 interface AppState {
   projects: Project[];
   currentProject: Project | null;
   tasks: GanttTask[];
+  groups: TaskGroup[];
   isLoading: boolean;
   error: string | null;
   isDBInitialized: boolean;
 
   // Actions
   initializeDB: () => Promise<void>;
+  resetDatabase: () => Promise<void>;
   loadProjects: () => Promise<void>;
   createProject: (name: string, description?: string) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
   loadTasksForProject: (projectId: string) => Promise<void>;
+  loadGroupsForProject: (projectId: string) => Promise<void>;
   createTask: (
     projectId: string,
     title: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    groupId?: string
   ) => Promise<GanttTask>;
   updateTask: (id: string, updates: Partial<GanttTask>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  createGroup: (projectId: string, title: string) => Promise<TaskGroup>;
+  updateGroup: (id: string, updates: Partial<TaskGroup>) => Promise<void>;
+  deleteGroup: (id: string) => Promise<void>;
   setError: (error: string | null) => void;
 }
 
@@ -33,6 +40,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
   currentProject: null,
   tasks: [],
+  groups: [],
   isLoading: false,
   error: null,
   isDBInitialized: false,
@@ -40,19 +48,42 @@ export const useAppStore = create<AppState>((set, get) => ({
   initializeDB: async () => {
     // Prevent multiple initialization calls
     if (get().isDBInitialized) {
+      console.log("Database already initialized, skipping...");
       return;
     }
 
     try {
+      console.log("Starting database initialization...");
       set({ isLoading: true, error: null });
+
+      console.log("Initializing IndexedDB...");
       await dbManager.initDB();
+
+      console.log("Loading projects...");
       await get().loadProjects();
+
+      console.log("Database initialization complete");
       set({ isDBInitialized: true });
     } catch (error) {
       console.error("Failed to initialize database:", error);
-      set({ error: "Failed to initialize database" });
+      set({
+        error: "Failed to initialize database: " + (error as Error).message,
+      });
       // Still set as initialized to prevent retries
       set({ isDBInitialized: true });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  resetDatabase: async () => {
+    try {
+      set({ isLoading: true, error: null });
+      await dbManager.resetDB();
+      set({ projects: [], currentProject: null, tasks: [], groups: [] });
+    } catch (error) {
+      console.error("Failed to reset database:", error);
+      set({ error: "Failed to reset database" });
     } finally {
       set({ isLoading: false });
     }
@@ -134,6 +165,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           state.currentProject && state.currentProject.id === id
             ? []
             : state.tasks,
+        groups:
+          state.currentProject && state.currentProject.id === id
+            ? []
+            : state.groups,
       }));
     } catch (error) {
       console.error("Failed to delete project:", error);
@@ -154,8 +189,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (project) {
       get().loadTasksForProject(project.id);
+      get().loadGroupsForProject(project.id);
     } else {
-      set({ tasks: [] });
+      set({ tasks: [], groups: [] });
     }
   },
 
@@ -177,11 +213,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loadGroupsForProject: async (projectId: string) => {
+    try {
+      const groups = await dbManager.getGroupsByProject(projectId);
+      const parsedGroups = groups.map((group) => ({
+        ...group,
+        createdAt: new Date(group.createdAt),
+      }));
+      set({ groups: parsedGroups });
+    } catch (error) {
+      console.error("Failed to load groups:", error);
+      set({ error: "Failed to load groups" });
+    }
+  },
+
   createTask: async (
     projectId: string,
     title: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    groupId?: string
   ) => {
     try {
       set({ isLoading: true, error: null });
@@ -193,6 +244,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         progress: 0,
         color: generateRandomColor(),
         projectId,
+        groupId,
       };
 
       await dbManager.addTask(task);
@@ -232,6 +284,67 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       console.error("Failed to delete task:", error);
       set({ error: "Failed to delete task" });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  createGroup: async (projectId: string, title: string) => {
+    try {
+      set({ isLoading: true, error: null });
+      const group: TaskGroup = {
+        id: generateId(),
+        title,
+        projectId,
+        color: generateRandomColor(),
+        isExpanded: true,
+        createdAt: new Date(),
+      };
+
+      await dbManager.addGroup(group);
+      set((state) => ({
+        groups: [...state.groups, group],
+      }));
+      return group;
+    } catch (error) {
+      console.error("Failed to create group:", error);
+      set({ error: "Failed to create group" });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateGroup: async (id: string, updates: Partial<TaskGroup>) => {
+    try {
+      await dbManager.updateGroup({ id, ...updates });
+      set((state) => ({
+        groups: state.groups.map((g) =>
+          g.id === id ? { ...g, ...updates } : g
+        ),
+      }));
+    } catch (error) {
+      console.error("Failed to update group:", error);
+      set({ error: "Failed to update group" });
+      throw error;
+    }
+  },
+
+  deleteGroup: async (id: string) => {
+    try {
+      set({ isLoading: true, error: null });
+      await dbManager.deleteGroup(id);
+      set((state) => ({
+        groups: state.groups.filter((g) => g.id !== id),
+        // Also remove groupId from tasks that belonged to this group
+        tasks: state.tasks.map((t) =>
+          t.groupId === id ? { ...t, groupId: undefined } : t
+        ),
+      }));
+    } catch (error) {
+      console.error("Failed to delete group:", error);
+      set({ error: "Failed to delete group" });
       throw error;
     } finally {
       set({ isLoading: false });

@@ -1,12 +1,42 @@
-import { Project, GanttTask } from "./types";
+import { Project, GanttTask, TaskGroup, TASK_COLORS } from "./types";
 
 const DB_NAME = "GanttDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const PROJECTS_STORE = "projects";
 const TASKS_STORE = "tasks";
+const GROUPS_STORE = "groups";
 
 class IndexedDBManager {
   private db: IDBDatabase | null = null;
+
+  async resetDB(): Promise<void> {
+    try {
+      // Close existing connection
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+
+      // Delete the database
+      await new Promise<void>((resolve, reject) => {
+        const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+        deleteRequest.onerror = () => reject(deleteRequest.error);
+        deleteRequest.onsuccess = () => resolve();
+        deleteRequest.onblocked = () => {
+          console.warn(
+            "Database deletion blocked. Please close all other tabs."
+          );
+          // Still resolve to continue
+          resolve();
+        };
+      });
+
+      console.log("Database reset complete");
+    } catch (error) {
+      console.error("Failed to reset database:", error);
+      throw error;
+    }
+  }
 
   async initDB(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -20,6 +50,12 @@ class IndexedDBManager {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
+
+        if (!transaction) {
+          reject(new Error("Transaction not available during upgrade"));
+          return;
+        }
 
         // Create projects store
         if (!db.objectStoreNames.contains(PROJECTS_STORE)) {
@@ -30,13 +66,29 @@ class IndexedDBManager {
           projectStore.createIndex("createdAt", "createdAt", { unique: false });
         }
 
-        // Create tasks store
+        // Create or update tasks store
         if (!db.objectStoreNames.contains(TASKS_STORE)) {
           const taskStore = db.createObjectStore(TASKS_STORE, {
             keyPath: "id",
           });
           taskStore.createIndex("projectId", "projectId", { unique: false });
+          taskStore.createIndex("groupId", "groupId", { unique: false });
           taskStore.createIndex("title", "title", { unique: false });
+        } else {
+          // Upgrade existing tasks store to add groupId index if it doesn't exist
+          const taskStore = transaction.objectStore(TASKS_STORE);
+          if (!taskStore.indexNames.contains("groupId")) {
+            taskStore.createIndex("groupId", "groupId", { unique: false });
+          }
+        }
+
+        // Create groups store (new in version 2)
+        if (!db.objectStoreNames.contains(GROUPS_STORE)) {
+          const groupStore = db.createObjectStore(GROUPS_STORE, {
+            keyPath: "id",
+          });
+          groupStore.createIndex("projectId", "projectId", { unique: false });
+          groupStore.createIndex("title", "title", { unique: false });
         }
       };
     });
@@ -94,7 +146,7 @@ class IndexedDBManager {
     const db = this.ensureDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(
-        [PROJECTS_STORE, TASKS_STORE],
+        [PROJECTS_STORE, TASKS_STORE, GROUPS_STORE],
         "readwrite"
       );
 
@@ -102,12 +154,25 @@ class IndexedDBManager {
       const projectStore = transaction.objectStore(PROJECTS_STORE);
       projectStore.delete(id);
 
-      // Delete all tasks for this project
+      // Delete all tasks and groups for this project
       const taskStore = transaction.objectStore(TASKS_STORE);
-      const index = taskStore.index("projectId");
-      const request = index.openCursor(IDBKeyRange.only(id));
+      const groupStore = transaction.objectStore(GROUPS_STORE);
 
-      request.onsuccess = (event) => {
+      const taskIndex = taskStore.index("projectId");
+      const taskRequest = taskIndex.openCursor(IDBKeyRange.only(id));
+
+      taskRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          cursor.delete();
+          cursor.continue();
+        }
+      };
+
+      const groupIndex = groupStore.index("projectId");
+      const groupRequest = groupIndex.openCursor(IDBKeyRange.only(id));
+
+      groupRequest.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           cursor.delete();
@@ -215,6 +280,99 @@ class IndexedDBManager {
       request.onsuccess = () => resolve(request.result || null);
     });
   }
+
+  // Group operations
+  async addGroup(group: TaskGroup): Promise<void> {
+    const db = this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([GROUPS_STORE], "readwrite");
+      const store = transaction.objectStore(GROUPS_STORE);
+      const request = store.add(group);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async updateGroup(group: Partial<TaskGroup> & { id: string }): Promise<void> {
+    const db = this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([GROUPS_STORE], "readwrite");
+      const store = transaction.objectStore(GROUPS_STORE);
+
+      const getRequest = store.get(group.id);
+      getRequest.onsuccess = () => {
+        const existingGroup = getRequest.result;
+        if (existingGroup) {
+          const updatedGroup = { ...existingGroup, ...group };
+          const putRequest = store.put(updatedGroup);
+          putRequest.onerror = () => reject(putRequest.error);
+          putRequest.onsuccess = () => resolve();
+        } else {
+          reject(new Error("Group not found"));
+        }
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    });
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    const db = this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(
+        [GROUPS_STORE, TASKS_STORE],
+        "readwrite"
+      );
+
+      // Delete group
+      const groupStore = transaction.objectStore(GROUPS_STORE);
+      groupStore.delete(id);
+
+      // Update tasks to remove groupId
+      const taskStore = transaction.objectStore(TASKS_STORE);
+      const index = taskStore.index("groupId");
+      const request = index.openCursor(IDBKeyRange.only(id));
+
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          const task = cursor.value;
+          const updatedTask = { ...task };
+          delete updatedTask.groupId;
+          cursor.update(updatedTask);
+          cursor.continue();
+        }
+      };
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async getGroupsByProject(projectId: string): Promise<TaskGroup[]> {
+    const db = this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([GROUPS_STORE], "readonly");
+      const store = transaction.objectStore(GROUPS_STORE);
+      const index = store.index("projectId");
+      const request = index.getAll(projectId);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async getGroup(id: string): Promise<TaskGroup | null> {
+    const db = this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([GROUPS_STORE], "readonly");
+      const store = transaction.objectStore(GROUPS_STORE);
+      const request = store.get(id);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || null);
+    });
+  }
 }
 
 export const dbManager = new IndexedDBManager();
@@ -225,17 +383,5 @@ export const generateId = (): string => {
 };
 
 export const generateRandomColor = (): string => {
-  const colors = [
-    "#3b82f6", // blue
-    "#10b981", // emerald
-    "#f59e0b", // amber
-    "#8b5cf6", // violet
-    "#ef4444", // red
-    "#06b6d4", // cyan
-    "#84cc16", // lime
-    "#f97316", // orange
-    "#ec4899", // pink
-    "#6366f1", // indigo
-  ];
-  return colors[Math.floor(Math.random() * colors.length)];
+  return TASK_COLORS[Math.floor(Math.random() * TASK_COLORS.length)];
 };
