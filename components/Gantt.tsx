@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { GanttTask, GanttConfig, TimelineView } from "@/lib/types";
+import { useAppStore } from "@/lib/store";
 import {
   calculateGanttDimensions,
   generateTimelineDates,
@@ -26,8 +27,9 @@ interface GanttProps {
   className?: string;
 }
 
-export default function Gantt({ tasks, className = "" }: GanttProps) {
+const Gantt = React.memo(function Gantt({ tasks, className = "" }: GanttProps) {
   const [view, setView] = useState<TimelineView>("daily");
+  const { updateTask } = useAppStore();
 
   const config: GanttConfig = useMemo(() => {
     const dimensions = calculateGanttDimensions(tasks, view);
@@ -42,7 +44,71 @@ export default function Gantt({ tasks, className = "" }: GanttProps) {
     [config.startDate, config.endDate, config.view]
   );
 
-  const chartWidth = timelineDates.length * config.cellWidth;
+  const chartWidth = useMemo(
+    () => timelineDates.length * config.cellWidth,
+    [timelineDates.length, config.cellWidth]
+  );
+
+  const handleTaskUpdate = useCallback(
+    async (taskId: string, updates: Partial<GanttTask>) => {
+      try {
+        await updateTask(taskId, updates);
+      } catch (error) {
+        console.error("Failed to update task:", error);
+      }
+    },
+    [updateTask]
+  );
+
+  const handleViewChange = useCallback((value: TimelineView) => {
+    setView(value);
+  }, []);
+
+  // Memoize task bars to prevent re-creation
+  const taskBars = useMemo(
+    () =>
+      tasks.map((task, index) => (
+        <GanttTaskBar
+          key={task.id}
+          task={task}
+          config={config}
+          index={index}
+          onTaskUpdate={handleTaskUpdate}
+        />
+      )),
+    [tasks, config, handleTaskUpdate]
+  );
+
+  // Memoize grid lines
+  const verticalGridLines = useMemo(
+    () =>
+      timelineDates.map((_, index) => (
+        <div
+          key={index}
+          className="absolute top-0 bottom-0 border-l border-gray-100"
+          style={{
+            left: `${index * config.cellWidth}px`,
+            width: "1px",
+          }}
+        />
+      )),
+    [timelineDates, config.cellWidth]
+  );
+
+  const horizontalGridLines = useMemo(
+    () =>
+      tasks.map((_, index) => (
+        <div
+          key={index}
+          className="absolute left-0 right-0 border-b border-gray-100"
+          style={{
+            top: `${index * config.rowHeight}px`,
+            height: "1px",
+          }}
+        />
+      )),
+    [tasks, config.rowHeight]
+  );
 
   return (
     <Card className={`w-full ${className}`}>
@@ -51,10 +117,7 @@ export default function Gantt({ tasks, className = "" }: GanttProps) {
           <CardTitle style={{ direction: "rtl" }}>نمودار گانت</CardTitle>
 
           <div className="flex items-center gap-2">
-            <Select
-              value={view}
-              onValueChange={(value: TimelineView) => setView(value)}
-            >
+            <Select value={view} onValueChange={handleViewChange}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -98,38 +161,12 @@ export default function Gantt({ tasks, className = "" }: GanttProps) {
               >
                 {/* Background Grid */}
                 <div className="absolute inset-0">
-                  {timelineDates.map((_, index) => (
-                    <div
-                      key={index}
-                      className="absolute top-0 bottom-0 border-l border-gray-100"
-                      style={{
-                        left: `${index * config.cellWidth}px`,
-                        width: "1px",
-                      }}
-                    />
-                  ))}
-
-                  {tasks.map((_, index) => (
-                    <div
-                      key={index}
-                      className="absolute left-0 right-0 border-b border-gray-100"
-                      style={{
-                        top: `${index * config.rowHeight}px`,
-                        height: "1px",
-                      }}
-                    />
-                  ))}
+                  {verticalGridLines}
+                  {horizontalGridLines}
                 </div>
 
                 {/* Task Bars */}
-                {tasks.map((task, index) => (
-                  <GanttTaskBar
-                    key={task.id}
-                    task={task}
-                    config={config}
-                    index={index}
-                  />
-                ))}
+                {taskBars}
 
                 {/* Today Indicator */}
                 <TodayIndicator config={config} />
@@ -140,56 +177,66 @@ export default function Gantt({ tasks, className = "" }: GanttProps) {
       </CardContent>
     </Card>
   );
-}
+});
 
-// Today indicator component
-function TodayIndicator({ config }: { config: GanttConfig }) {
-  const today = new Date();
-  const timelineDates = generateTimelineDates(
-    config.startDate,
-    config.endDate,
-    config.view
-  );
+// Today indicator component - memoized
+const TodayIndicator = React.memo(function TodayIndicator({
+  config,
+}: {
+  config: GanttConfig;
+}) {
+  const todayPosition = useMemo(() => {
+    const today = new Date();
+    const timelineDates = generateTimelineDates(
+      config.startDate,
+      config.endDate,
+      config.view
+    );
 
-  let todayIndex = -1;
-  let todayPosition = 0;
+    let todayIndex = -1;
+    let position = 0;
 
-  if (config.view === "daily") {
-    // Find today's position in daily view using jalali-moment for consistent comparison
-    todayIndex = timelineDates.findIndex((date) => {
-      return jMoment(date).isSame(jMoment(today), "day");
-    });
+    if (config.view === "daily") {
+      // Find today's position in daily view using jalali-moment for consistent comparison
+      todayIndex = timelineDates.findIndex((date) => {
+        return jMoment(date).isSame(jMoment(today), "day");
+      });
 
-    if (todayIndex !== -1) {
-      todayPosition = todayIndex * config.cellWidth + config.cellWidth / 2;
+      if (todayIndex !== -1) {
+        position = todayIndex * config.cellWidth + config.cellWidth / 2;
+      }
+    } else {
+      // Weekly view - find which week contains today
+      const todayWeekStart = jMoment(today).startOf("week");
+
+      todayIndex = timelineDates.findIndex((date) => {
+        const weekStart = jMoment(date).startOf("week");
+        return weekStart.isSame(todayWeekStart, "week");
+      });
+
+      if (todayIndex !== -1) {
+        // Calculate position within the week
+        const weekStart = jMoment(timelineDates[todayIndex]).startOf("week");
+        const dayInWeek = jMoment(today).diff(weekStart, "days");
+        const dayWidth = config.cellWidth / 7; // Divide week width by 7 days
+        position = todayIndex * config.cellWidth + dayInWeek * dayWidth;
+      }
     }
-  } else {
-    // Weekly view - find which week contains today
-    const todayWeekStart = jMoment(today).startOf("week");
 
-    todayIndex = timelineDates.findIndex((date) => {
-      const weekStart = jMoment(date).startOf("week");
-      return weekStart.isSame(todayWeekStart, "week");
-    });
+    return { index: todayIndex, position };
+  }, [config]);
 
-    if (todayIndex !== -1) {
-      // Calculate position within the week
-      const weekStart = jMoment(timelineDates[todayIndex]).startOf("week");
-      const dayInWeek = jMoment(today).diff(weekStart, "days");
-      const dayWidth = config.cellWidth / 7; // Divide week width by 7 days
-      todayPosition = todayIndex * config.cellWidth + dayInWeek * dayWidth;
-    }
-  }
-
-  if (todayIndex === -1) return null;
+  if (todayPosition.index === -1) return null;
 
   return (
     <div
       className="absolute top-0 bottom-0 pointer-events-none z-10"
-      style={{ right: `${todayPosition}px` }}
+      style={{ right: `${todayPosition.position}px` }}
     >
       <div className="w-px h-full bg-red-500 opacity-70" />
       <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
     </div>
   );
-}
+});
+
+export default Gantt;
