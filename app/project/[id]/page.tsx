@@ -28,14 +28,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import {
-  ArrowLeft,
-  Plus,
-  Settings,
-  Trash2,
-  Edit3,
-  Printer,
-} from "lucide-react";
+import { Plus, Settings, Trash2, Edit3, Printer } from "lucide-react";
 import Gantt from "@/components/Gantt";
 import jMoment from "jalali-moment";
 import { GanttTask } from "@/lib/types";
@@ -227,15 +220,15 @@ export default function ProjectPage() {
         <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button
+              {/* <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleBackClick}
                 className="gap-2"
               >
-                <ArrowLeft className="w-4 h-4" />
                 بازگشت
-              </Button>
+                <ArrowLeft className="w-4 h-4" />
+              </Button> */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   {currentProject.name}
@@ -246,43 +239,6 @@ export default function ProjectPage() {
                   </p>
                 )}
               </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Project Selector */}
-              <Select
-                value={currentProject.id}
-                onValueChange={handleProjectChange}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Print Button */}
-              <Button
-                variant="outline"
-                onClick={() =>
-                  router.push(
-                    `/project/${projectId}/print?view=${
-                      tasks.length > 0 ? "daily" : "weekly"
-                    }`
-                  )
-                }
-                className="gap-2"
-                disabled={tasks.length === 0}
-              >
-                <Printer className="w-4 h-4" />
-                چاپ
-              </Button>
-
               {/* Add Task Button */}
               <Dialog
                 open={isAddTaskDialogOpen}
@@ -354,6 +310,42 @@ export default function ProjectPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Project Selector */}
+              <Select
+                value={currentProject.id}
+                onValueChange={handleProjectChange}
+              >
+                <SelectTrigger className="w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Print Button */}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  router.push(
+                    `/project/${projectId}/print?view=${
+                      tasks.length > 0 ? "daily" : "weekly"
+                    }`
+                  )
+                }
+                className="gap-2"
+                disabled={tasks.length === 0}
+              >
+                <Printer className="w-4 h-4" />
+                چاپ
+              </Button>
             </div>
           </div>
         </div>
