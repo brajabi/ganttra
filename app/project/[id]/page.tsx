@@ -28,7 +28,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus, Settings, Trash2, Edit3 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Settings,
+  Trash2,
+  Edit3,
+  Printer,
+} from "lucide-react";
 import Gantt from "@/components/Gantt";
 import jMoment from "jalali-moment";
 import { GanttTask } from "@/lib/types";
@@ -258,6 +265,23 @@ export default function ProjectPage() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Print Button */}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  router.push(
+                    `/project/${projectId}/print?view=${
+                      tasks.length > 0 ? "daily" : "weekly"
+                    }`
+                  )
+                }
+                className="gap-2"
+                disabled={tasks.length === 0}
+              >
+                <Printer className="w-4 h-4" />
+                چاپ
+              </Button>
 
               {/* Add Task Button */}
               <Dialog

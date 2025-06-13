@@ -1,0 +1,70 @@
+@media print {
+  /* Hide all controls when printing */
+  /* .print:hidden {
+    display: none !important;
+  } */
+
+  /* Print page settings */
+  @page {
+    margin: 0.3in;
+    size: A4 landscape;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-gantt {
+    font-size: 10px;
+    color: #000 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-gantt-container {
+    page-break-inside: avoid;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-task-list {
+    break-inside: avoid;
+  }
+
+  .print-chart-area {
+    overflow: visible !important;
+  }
+
+  .print-timeline {
+    break-inside: avoid;
+  }
+
+  .print-grid-line {
+    opacity: 0.6;
+  }
+
+  .print-today-line {
+    opacity: 0.9;
+  }
+
+  .print-today-dot {
+    opacity: 0.9;
+  }
+}
+
+/* Ensure colors are preserved in print */
+.print-gantt * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+/* Hide scrollbars in print */
+@media print {
+  .print-chart-area {
+    overflow: visible !important;
+  }
+}
