@@ -84,29 +84,35 @@ export const calculateTaskPosition = (
   task: GanttTask,
   config: GanttConfig
 ): { left: number; width: number } => {
-  const startDiff = jMoment(task.startDate).diff(
-    jMoment(config.startDate),
-    "days"
-  );
-  const duration =
-    jMoment(task.endDate).diff(jMoment(task.startDate), "days") + 1;
-
-  let cellsFromStart: number;
-  let taskWidthInCells: number;
-
   if (config.view === "daily") {
-    cellsFromStart = startDiff;
-    taskWidthInCells = duration;
-  } else {
-    // Weekly view
-    cellsFromStart = Math.floor(startDiff / 7);
-    taskWidthInCells = Math.ceil(duration / 7);
-  }
+    const startDiff = jMoment(task.startDate).diff(
+      jMoment(config.startDate),
+      "days"
+    );
+    const duration =
+      jMoment(task.endDate).diff(jMoment(task.startDate), "days") + 1;
 
-  return {
-    left: cellsFromStart * config.cellWidth,
-    width: taskWidthInCells * config.cellWidth - 2, // -2 for border spacing
-  };
+    return {
+      left: startDiff * config.cellWidth,
+      width: duration * config.cellWidth - 2, // -2 for border spacing
+    };
+  } else {
+    // Weekly view - calculate based on weeks
+    const configStartWeek = jMoment(config.startDate).startOf("week");
+    const taskStartWeek = jMoment(task.startDate).startOf("week");
+    const taskEndWeek = jMoment(task.endDate).startOf("week");
+
+    const weeksFromStart = taskStartWeek.diff(configStartWeek, "weeks");
+    const taskDurationInWeeks = Math.max(
+      1,
+      taskEndWeek.diff(taskStartWeek, "weeks") + 1
+    );
+
+    return {
+      left: weeksFromStart * config.cellWidth,
+      width: taskDurationInWeeks * config.cellWidth - 2, // -2 for border spacing
+    };
+  }
 };
 
 export const isDateInRange = (
@@ -143,9 +149,21 @@ export const calculateGanttDimensions = (
   );
   const endDate = new Date(Math.max(...tasks.map((t) => t.endDate.getTime())));
 
-  // Add some padding
-  const paddedStart = jMoment(startDate).subtract(1, "week").toDate();
-  const paddedEnd = jMoment(endDate).add(1, "week").toDate();
+  let paddedStart: Date;
+  let paddedEnd: Date;
+
+  if (view === "weekly") {
+    // For weekly view, align to week boundaries
+    paddedStart = jMoment(startDate)
+      .subtract(1, "week")
+      .startOf("week")
+      .toDate();
+    paddedEnd = jMoment(endDate).add(1, "week").endOf("week").toDate();
+  } else {
+    // For daily view, add some padding
+    paddedStart = jMoment(startDate).subtract(1, "week").toDate();
+    paddedEnd = jMoment(endDate).add(1, "week").toDate();
+  }
 
   return {
     startDate: paddedStart,

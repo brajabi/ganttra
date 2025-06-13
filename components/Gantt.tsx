@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CalendarDays, Calendar } from "lucide-react";
+import jMoment from "jalali-moment";
 
 interface GanttProps {
   tasks: GanttTask[];
@@ -150,24 +151,45 @@ function TodayIndicator({ config }: { config: GanttConfig }) {
     config.view
   );
 
-  // Find today's position
-  const todayIndex = timelineDates.findIndex((date) => {
-    const dateStr = date.toDateString();
-    const todayStr = today.toDateString();
-    return dateStr === todayStr;
-  });
+  let todayIndex = -1;
+  let todayPosition = 0;
+
+  if (config.view === "daily") {
+    // Find today's position in daily view using jalali-moment for consistent comparison
+    todayIndex = timelineDates.findIndex((date) => {
+      return jMoment(date).isSame(jMoment(today), "day");
+    });
+
+    if (todayIndex !== -1) {
+      todayPosition = todayIndex * config.cellWidth + config.cellWidth / 2;
+    }
+  } else {
+    // Weekly view - find which week contains today
+    const todayWeekStart = jMoment(today).startOf("week");
+
+    todayIndex = timelineDates.findIndex((date) => {
+      const weekStart = jMoment(date).startOf("week");
+      return weekStart.isSame(todayWeekStart, "week");
+    });
+
+    if (todayIndex !== -1) {
+      // Calculate position within the week
+      const weekStart = jMoment(timelineDates[todayIndex]).startOf("week");
+      const dayInWeek = jMoment(today).diff(weekStart, "days");
+      const dayWidth = config.cellWidth / 7; // Divide week width by 7 days
+      todayPosition = todayIndex * config.cellWidth + dayInWeek * dayWidth;
+    }
+  }
 
   if (todayIndex === -1) return null;
-
-  const todayPosition = todayIndex * config.cellWidth + config.cellWidth / 2;
 
   return (
     <div
       className="absolute top-0 bottom-0 pointer-events-none z-10"
-      style={{ left: `${todayPosition}px` }}
+      style={{ right: `${todayPosition}px` }}
     >
       <div className="w-px h-full bg-red-500 opacity-70" />
-      <div className="absolute -top-1 -left-1 w-2 h-2 bg-red-500 rounded-full" />
+      <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
     </div>
   );
 }
