@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { GanttTask, GanttConfig, TimelineView } from "@/lib/types";
+import { GanttTask, GanttConfig, TimelineView, TaskGroup } from "@/lib/types";
 import {
   calculateGanttDimensions,
   generateTimelineDates,
@@ -10,29 +10,98 @@ import {
   formatJalaliDate,
   formatJalaliDateShort,
   formatJalaliWeek,
-  getDayName,
 } from "@/lib/gantt-utils";
 import jMoment from "jalali-moment";
 import "../styles/print.css";
 
 interface GanttPrintProps {
   tasks: GanttTask[];
+  groups?: TaskGroup[];
   view: TimelineView;
+}
+
+// Interface for organized data structure
+interface GanttRow {
+  type: "group" | "task";
+  id: string;
+  data: TaskGroup | GanttTask;
+  index: number; // Position in the visual list
 }
 
 const GanttPrint = React.memo(function GanttPrint({
   tasks,
+  groups = [],
   view,
 }: GanttPrintProps) {
+  // Organize tasks and groups into rows
+  const organizedRows = useMemo((): GanttRow[] => {
+    const rows: GanttRow[] = [];
+    let index = 0;
+
+    // Group tasks by groupId
+    const tasksByGroup = tasks.reduce((acc, task) => {
+      const groupId = task.groupId || "ungrouped";
+      if (!acc[groupId]) {
+        acc[groupId] = [];
+      }
+      acc[groupId].push(task);
+      return acc;
+    }, {} as Record<string, GanttTask[]>);
+
+    // First, add grouped tasks
+    groups.forEach((group) => {
+      // Add group header
+      rows.push({
+        type: "group",
+        id: group.id,
+        data: group,
+        index: index++,
+      });
+
+      // Add tasks in this group
+      const groupTasks = tasksByGroup[group.id] || [];
+      groupTasks.forEach((task) => {
+        rows.push({
+          type: "task",
+          id: task.id,
+          data: task,
+          index: index++,
+        });
+      });
+    });
+
+    // Then add ungrouped tasks
+    const ungroupedTasks = tasksByGroup["ungrouped"] || [];
+    ungroupedTasks.forEach((task) => {
+      rows.push({
+        type: "task",
+        id: task.id,
+        data: task,
+        index: index++,
+      });
+    });
+
+    return rows;
+  }, [tasks, groups]);
+
+  // Extract only tasks for dimension calculation
+  const allTasks = useMemo(
+    () =>
+      organizedRows
+        .filter((row) => row.type === "task")
+        .map((row) => row.data as GanttTask),
+    [organizedRows]
+  );
+
   const config: GanttConfig = useMemo(() => {
-    const dimensions = calculateGanttDimensions(tasks, view);
+    const dimensions = calculateGanttDimensions(allTasks, view);
     return {
       view,
       ...dimensions,
       cellWidth: view === "daily" ? 40 : 80, // Smaller for print
       rowHeight: 40, // Smaller for print
     };
-  }, [tasks, view]);
+  }, [allTasks, view]);
 
   const timelineDates = useMemo(
     () => generateTimelineDates(config.startDate, config.endDate, config.view),
@@ -44,21 +113,48 @@ const GanttPrint = React.memo(function GanttPrint({
     [timelineDates.length, config.cellWidth]
   );
 
-  // Task bars for print
-  const taskBars = useMemo(
-    () =>
-      tasks.map((task, index) => {
+  // Render task bars and group headers for print
+  const rowElements = useMemo(() => {
+    return organizedRows.map((row) => {
+      if (row.type === "group") {
+        const group = row.data as TaskGroup;
+        return (
+          <div
+            key={`group-${group.id}`}
+            className="absolute left-0 right-0 flex items-center bg-gray-200 border-b border-gray-400 px-2"
+            style={{
+              top: `${row.index * config.rowHeight}px`,
+              height: `${config.rowHeight}px`,
+              zIndex: 5,
+            }}
+          >
+            <div
+              className="flex items-center gap-2"
+              style={{ direction: "rtl" }}
+            >
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: group.color || "#6b7280" }}
+              />
+              <span className="font-semibold text-gray-800 text-xs">
+                {group.title}
+              </span>
+            </div>
+          </div>
+        );
+      } else {
+        const task = row.data as GanttTask;
         const position = calculateTaskPosition(task, config);
         const taskColor = getTaskColor(task);
 
         return (
           <div
-            key={task.id}
+            key={`task-${task.id}`}
             className="absolute flex items-center z-10"
             style={{
               right: `${position.left}px`,
               width: `${position.width}px`,
-              top: `${index * config.rowHeight + 4}px`,
+              top: `${row.index * config.rowHeight + 4}px`,
               height: `${config.rowHeight - 8}px`,
             }}
           >
@@ -91,9 +187,9 @@ const GanttPrint = React.memo(function GanttPrint({
             </div>
           </div>
         );
-      }),
-    [tasks, config]
-  );
+      }
+    });
+  }, [organizedRows, config]);
 
   // Grid lines for print
   const verticalGridLines = useMemo(
@@ -113,7 +209,7 @@ const GanttPrint = React.memo(function GanttPrint({
 
   const horizontalGridLines = useMemo(
     () =>
-      tasks.map((_, index) => (
+      organizedRows.map((_, index) => (
         <div
           key={index}
           className="absolute left-0 right-0 border-b border-gray-300 print-grid-line"
@@ -123,7 +219,7 @@ const GanttPrint = React.memo(function GanttPrint({
           }}
         />
       )),
-    [tasks, config.rowHeight]
+    [organizedRows, config.rowHeight]
   );
 
   // Today indicator for print
@@ -181,84 +277,117 @@ const GanttPrint = React.memo(function GanttPrint({
           >
             {/* Task List Items */}
             <div>
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="border-b border-gray-200 p-2"
-                  style={{ height: `${config.rowHeight}px` }}
-                >
-                  <div
-                    className="flex items-center justify-between h-full"
-                    style={{ direction: "rtl" }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-medium text-gray-900 truncate text-right">
-                        {task.title}
-                      </h4>
-                      <div className="mt-1 text-xs text-gray-500 text-right">
-                        {formatJalaliDate(task.startDate, "jMM/jDD")} -{" "}
-                        {formatJalaliDate(task.endDate, "jMM/jDD")}
+              {organizedRows.map((row) => {
+                if (row.type === "group") {
+                  const group = row.data as TaskGroup;
+                  return (
+                    <div
+                      key={`group-${group.id}`}
+                      className="bg-gray-200 border-b border-gray-400 p-2"
+                      style={{ height: `${config.rowHeight}px` }}
+                    >
+                      <div
+                        className="flex items-center h-full"
+                        style={{ direction: "rtl" }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{
+                              backgroundColor: group.color || "#6b7280",
+                            }}
+                          />
+                          <span className="font-semibold text-gray-800 text-xs">
+                            {group.title}
+                          </span>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1 mr-2">
-                      {task.progress !== undefined && (
-                        <span className="text-xs text-gray-600">
-                          {task.progress}%
-                        </span>
-                      )}
+                  );
+                } else {
+                  const task = row.data as GanttTask;
+                  return (
+                    <div
+                      key={`task-${task.id}`}
+                      className="border-b border-gray-200 p-2"
+                      style={{ height: `${config.rowHeight}px` }}
+                    >
                       <div
-                        className="w-2 h-2 rounded-full border border-gray-300"
-                        style={{ backgroundColor: task.color || "#3b82f6" }}
-                      />
+                        className="flex items-center justify-between h-full"
+                        style={{ direction: "rtl" }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs font-medium text-gray-900 truncate text-right">
+                            {task.title}
+                          </h4>
+                          <div className="mt-1 text-xs text-gray-500 text-right">
+                            {formatJalaliDate(task.startDate, "jMM/jDD")} -{" "}
+                            {formatJalaliDate(task.endDate, "jMM/jDD")}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 mr-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: task.color || "#3b82f6" }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                }
+              })}
             </div>
           </div>
 
           {/* Chart Area */}
-          <div className="print-chart-area flex-1">
+          <div className="print-chart-area flex-1 overflow-hidden">
             <div className="relative" style={{ width: `${chartWidth}px` }}>
               {/* Timeline Header */}
-              <div className="print-timeline bg-gray-100 border-b border-gray-400">
-                <div className="flex" style={{ direction: "rtl" }}>
-                  {timelineDates.map((date, index) => (
-                    <div
-                      key={index}
-                      className="flex-shrink-0 border-l border-gray-300 bg-gray-50"
-                      style={{ width: `${config.cellWidth}px` }}
-                    >
-                      <div className="p-1 text-center">
-                        {config.view === "daily" ? (
-                          <div className="text-xs">
-                            <div className="font-semibold text-gray-900">
-                              {formatJalaliDateShort(date)}
-                            </div>
-                            <div className="text-gray-600 text-xs">
-                              {getDayName(date).substring(0, 1)}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-xs">
-                            <div className="font-semibold text-gray-900">
-                              {formatJalaliWeek(date)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <div
+                className="bg-gray-100 border-b border-gray-400 px-2 print-timeline-header"
+                style={{ height: "50px" }}
+              >
+                <div
+                  className="flex items-center h-full"
+                  style={{ direction: "rtl" }}
+                >
+                  <div className="text-sm font-semibold text-gray-900">
+                    {config.view === "daily" ? "نمای روزانه" : "نمای هفتگی"} -{" "}
+                    {formatJalaliDate(config.startDate, "jYYYY/jMM/jDD")} تا{" "}
+                    {formatJalaliDate(config.endDate, "jYYYY/jMM/jDD")}
+                  </div>
                 </div>
+              </div>
+
+              {/* Timeline Dates */}
+              <div
+                className="relative bg-white border-b border-gray-400"
+                style={{ height: "30px" }}
+              >
+                {timelineDates.map((date, index) => (
+                  <div
+                    key={index}
+                    className="absolute top-0 flex items-center justify-center border-l border-gray-200 text-xs font-medium text-gray-700"
+                    style={{
+                      left: `${index * config.cellWidth}px`,
+                      width: `${config.cellWidth}px`,
+                      height: "30px",
+                    }}
+                  >
+                    {config.view === "daily"
+                      ? formatJalaliDateShort(date)
+                      : formatJalaliWeek(date)}
+                  </div>
+                ))}
               </div>
 
               {/* Task Chart */}
               <div
-                className="relative bg-white"
+                className="relative bg-white print-chart-body"
                 style={{
-                  height: `${tasks.length * config.rowHeight}px`,
-                  minHeight: "100px",
+                  height: `${organizedRows.length * config.rowHeight}px`,
+                  minHeight: "200px",
                 }}
               >
                 {/* Background Grid */}
@@ -267,8 +396,8 @@ const GanttPrint = React.memo(function GanttPrint({
                   {horizontalGridLines}
                 </div>
 
-                {/* Task Bars */}
-                {taskBars}
+                {/* Task Bars and Group Headers */}
+                {rowElements}
 
                 {/* Today Indicator */}
                 {todayIndicator}

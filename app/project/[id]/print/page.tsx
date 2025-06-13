@@ -18,6 +18,7 @@ export default function PrintPage() {
     projects,
     currentProject,
     tasks,
+    groups,
     isLoading,
     initializeDB,
     setCurrentProject,
@@ -153,7 +154,7 @@ export default function PrintPage() {
       {/* Print Content */}
       <div className="bg-white min-h-screen">
         <div className="max-w-7xl mx-auto p-4 print:p-0 print:max-w-none">
-          <GanttPrint tasks={tasks} view={view} />
+          <GanttPrint tasks={tasks} groups={groups} view={view} />
         </div>
       </div>
 
