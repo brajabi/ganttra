@@ -343,7 +343,7 @@ export default function ProjectPage() {
         {/* Gantt Chart - Full Screen */}
         <div className="flex-1 overflow-hidden">
           {tasks.length > 0 ? (
-            <Gantt tasks={tasks} onTaskClick={handleTaskClick} />
+            <Gantt tasks={tasks} onTaskDoubleClick={handleTaskClick} />
           ) : (
             <div className="h-full flex items-center justify-center">
               <Card className="text-center py-12">

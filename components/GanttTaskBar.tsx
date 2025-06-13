@@ -20,6 +20,7 @@ interface GanttTaskBarProps {
   config: GanttConfig;
   index: number;
   onTaskUpdate?: (taskId: string, updates: Partial<GanttTask>) => void;
+  onTaskDoubleClick?: (task: GanttTask) => void;
 }
 
 export default function GanttTaskBar({
@@ -27,6 +28,7 @@ export default function GanttTaskBar({
   config,
   index,
   onTaskUpdate,
+  onTaskDoubleClick,
 }: GanttTaskBarProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState<"left" | "right" | null>(null);
@@ -158,6 +160,11 @@ export default function GanttTaskBar({
                 borderColor: taskColor,
               }}
               onMouseDown={(e) => handleMouseDown(e, "drag")}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onTaskDoubleClick?.(task);
+              }}
             >
               {/* Task Progress Bar */}
               {task.progress !== undefined && (

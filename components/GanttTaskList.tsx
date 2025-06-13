@@ -1,19 +1,21 @@
 "use client";
 
 import { GanttTask, GanttConfig } from "@/lib/types";
-import { formatJalaliDate } from "@/lib/gantt-utils";
+import { formatJalaliDate, toPersianNumbers } from "@/lib/gantt-utils";
 import { Badge } from "@/components/ui/badge";
 
 interface GanttTaskListProps {
   tasks: GanttTask[];
   config: GanttConfig;
   onTaskClick?: (task: GanttTask) => void;
+  onTaskDoubleClick?: (task: GanttTask) => void;
 }
 
 export default function GanttTaskList({
   tasks,
   config,
   onTaskClick,
+  onTaskDoubleClick,
 }: GanttTaskListProps) {
   return (
     <div
@@ -36,6 +38,7 @@ export default function GanttTaskList({
             className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
             style={{ height: `${config.rowHeight}px` }}
             onClick={() => onTaskClick?.(task)}
+            onDoubleClick={() => onTaskDoubleClick?.(task)}
           >
             <div
               className="flex items-center justify-between h-full"
@@ -55,7 +58,7 @@ export default function GanttTaskList({
               <div className="flex items-center gap-2 mr-3">
                 {task.progress !== undefined && (
                   <Badge variant="outline" className="text-xs">
-                    {task.progress}%
+                    {toPersianNumbers(task.progress.toString())}%
                   </Badge>
                 )}
 

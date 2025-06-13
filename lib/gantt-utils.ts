@@ -5,21 +5,32 @@ import { GanttTask, GanttConfig, TimelineView } from "./types";
 // Configure jalali-moment to use Persian locale
 jMoment.locale("fa");
 
+// Convert English numerals to Persian numerals
+const toPersianNumbers = (str: string): string => {
+  const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+  return str.replace(/[0-9]/g, (w) => persianDigits[+w]);
+};
+
+// Export the function
+export { toPersianNumbers };
+
 export const formatJalaliDate = (
   date: Date,
   format: string = "jYYYY/jMM/jDD"
 ): string => {
-  return jMoment(date).format(format);
+  return toPersianNumbers(jMoment(date).format(format));
 };
 
 export const formatJalaliDateShort = (date: Date): string => {
-  return jMoment(date).format("jMM/jDD");
+  return toPersianNumbers(jMoment(date).format("jMM/jDD"));
 };
 
 export const formatJalaliWeek = (date: Date): string => {
   const startOfWeek = jMoment(date).startOf("week");
   const endOfWeek = jMoment(date).endOf("week");
-  return `${startOfWeek.format("jMM/jDD")} - ${endOfWeek.format("jMM/jDD")}`;
+  return toPersianNumbers(
+    `${startOfWeek.format("jMM/jDD")} - ${endOfWeek.format("jMM/jDD")}`
+  );
 };
 
 export const getDayName = (date: Date): string => {
@@ -36,7 +47,7 @@ export const formatGregorianDate = (date: Date): string => {
 export const formatHijriDate = (date: Date): string => {
   // Using moment-hijri for accurate Hijri date conversion
   const hijriMoment = moment(date);
-  return hijriMoment.format("iYYYY/iMM/iDD");
+  return toPersianNumbers(hijriMoment.format("iYYYY/iMM/iDD"));
 };
 
 export const getCompleteDateInfo = (date: Date) => {
@@ -44,7 +55,7 @@ export const getCompleteDateInfo = (date: Date) => {
     jalali: formatJalaliDate(date, "jYYYY/jMM/jDD"),
     gregorian: formatGregorianDate(date),
     hijri: formatHijriDate(date),
-    jalaliLong: jMoment(date).format("dddd، jD jMMMM jYYYY"),
+    jalaliLong: toPersianNumbers(jMoment(date).format("dddd، jD jMMMM jYYYY")),
     gregorianLong: date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",

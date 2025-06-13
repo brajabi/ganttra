@@ -26,12 +26,14 @@ interface GanttProps {
   tasks: GanttTask[];
   className?: string;
   onTaskClick?: (task: GanttTask) => void;
+  onTaskDoubleClick?: (task: GanttTask) => void;
 }
 
 const Gantt = React.memo(function Gantt({
   tasks,
   className = "",
   onTaskClick,
+  onTaskDoubleClick,
 }: GanttProps) {
   const [view, setView] = useState<TimelineView>("daily");
   const { updateTask } = useAppStore();
@@ -79,9 +81,10 @@ const Gantt = React.memo(function Gantt({
           config={config}
           index={index}
           onTaskUpdate={handleTaskUpdate}
+          onTaskDoubleClick={onTaskDoubleClick}
         />
       )),
-    [tasks, config, handleTaskUpdate]
+    [tasks, config, handleTaskUpdate, onTaskDoubleClick]
   );
 
   // Memoize grid lines
@@ -152,6 +155,7 @@ const Gantt = React.memo(function Gantt({
             tasks={tasks}
             config={config}
             onTaskClick={onTaskClick}
+            onTaskDoubleClick={onTaskDoubleClick}
           />
 
           {/* Chart Area */}
